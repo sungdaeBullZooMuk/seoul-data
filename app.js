@@ -590,7 +590,7 @@ async function fetchDashboardData(placeName) {
       const apiData = json.CITYDATA;
       
       // Live Population Extraction
-      const pplStts = apiData.LIVE_PPLN_STTS ? apiData.LIVE_PPLN_STTS[0] : {};
+      const pplStts = apiData.LIVE_PPLTN_STTS ? apiData.LIVE_PPLTN_STTS[0] : (apiData.LIVE_PPLN_STTS ? apiData.LIVE_PPLN_STTS[0] : {});
       
       // Road Traffic Extraction (ROAD_TRAFFIC_STTS contains AVG_ROAD_DATA object)
       const roadStts = apiData.ROAD_TRAFFIC_STTS ? (apiData.ROAD_TRAFFIC_STTS.AVG_ROAD_DATA || {}) : {};
@@ -683,7 +683,7 @@ async function fetchDashboardData(placeName) {
           if (retryJson.CITYDATA) {
             console.log('Direct Seoul API fetch succeeded, using live data.');
             const apiData = retryJson.CITYDATA;
-            const pplStts = apiData.LIVE_PPLN_STTS ? apiData.LIVE_PPLN_STTS[0] : {};
+            const pplStts = apiData.LIVE_PPLTN_STTS ? apiData.LIVE_PPLTN_STTS[0] : (apiData.LIVE_PPLN_STTS ? apiData.LIVE_PPLN_STTS[0] : {});
             const roadStts = apiData.ROAD_TRAFFIC_STTS ? (apiData.ROAD_TRAFFIC_STTS.AVG_ROAD_DATA || {}) : {};
             const weatherStts = apiData.WEATHER_STTS ? apiData.WEATHER_STTS[0] : {};
 

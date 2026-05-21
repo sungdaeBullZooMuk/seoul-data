@@ -21,6 +21,31 @@ let leafletMarker = null;
 let leafletBoundary = null;
 let congestionTrendChart = null;
 
+function normalizeFallbackData(placeName, fallbackPayload) {
+  const origin = fallbackPayload || window.SeoulFallbackData[placeName] || {};
+  return {
+    areaName: placeName,
+    congestLvl: origin.AREA_CONGEST_LVL || '보통',
+    congestMsg: origin.AREA_CONGEST_MSG || '',
+    pplMin: parseInt(origin.AREA_PPLN_MIN) || 20000,
+    pplMax: parseInt(origin.AREA_PPLN_MAX) || 25000,
+    congestionTrend: origin.CONGESTION_TREND || Array(24).fill(30),
+    roadMsg: origin.ROAD_MSG || '',
+    roadTrafficIdx: origin.ROAD_TRAFFIC_IDX || '원활',
+    roadTrafficSpd: parseFloat(origin.ROAD_TRAFFIC_SPD) || 25.0,
+    weatherTemp: parseFloat(origin.WEATHER_TEMP) || 20.0,
+    weatherMsg: origin.WEATHER_MSG || '맑음',
+    pm10: parseInt(origin.PM10) || 35,
+    pm25: parseInt(origin.PM25) || 18,
+    pm10Idx: origin.PM10_INDEX || '보통',
+    pm25Idx: origin.PM25_INDEX || '좋음',
+    bikeList: origin.BIKE_LIST || [],
+    lat: parseFloat(origin.LAT) || 37.5665,
+    lng: parseFloat(origin.LNG) || 126.9780,
+    radius: origin.RADIUS || 300
+  };
+}
+
 // --- 2. Chart.js Themes & Initialization ---
 function initCharts() {
   const ctxTrend = document.getElementById('congestionTrendChart').getContext('2d');
@@ -661,6 +686,7 @@ async function fetchDashboardData(placeName) {
       updateStatusBadge(false, proxyMode);
     } else {
       // In case keys don't match, trigger custom error
+      console.warn('Invalid proxy/API payload received for:', placeName, json);
       throw new Error("Invalid API response format (Missing 'CITYDATA' key)");
     }
 
@@ -723,28 +749,8 @@ async function fetchDashboardData(placeName) {
 
     if (!processedData) {
       simulated = window.getFluctuatedData(placeName);
-      const fallbackItem = window.SeoulFallbackData[placeName] || {};
-      processedData = {
-        areaName: placeName,
-        congestLvl: simulated ? simulated.AREA_CONGEST_LVL : '보통',
-        congestMsg: simulated ? simulated.AREA_CONGEST_MSG : '',
-        pplMin: simulated ? simulated.AREA_PPLN_MIN : 20000,
-        pplMax: simulated ? simulated.AREA_PPLN_MAX : 25000,
-        congestionTrend: simulated ? (simulated.CONGESTION_TREND || fallbackItem.CONGESTION_TREND) : Array(24).fill(30),
-        roadMsg: simulated ? simulated.ROAD_MSG : '',
-        roadTrafficIdx: simulated ? simulated.ROAD_TRAFFIC_IDX : '원활',
-        roadTrafficSpd: simulated ? simulated.ROAD_TRAFFIC_SPD : 25.0,
-        weatherTemp: simulated ? simulated.WEATHER_TEMP : 20.0,
-        weatherMsg: simulated ? simulated.WEATHER_MSG : '맑음',
-        pm10: simulated ? simulated.PM10 : 35,
-        pm25: simulated ? simulated.PM25 : 18,
-        pm10Idx: simulated ? simulated.PM10_INDEX : '보통',
-        pm25Idx: simulated ? simulated.PM25_INDEX : '좋음',
-        bikeList: simulated ? simulated.BIKE_LIST : [],
-        lat: fallbackItem.LAT || 37.5665,
-        lng: fallbackItem.LNG || 126.9780,
-        radius: fallbackItem.RADIUS || 300
-      };
+      const fallbackItem = simulated || window.SeoulFallbackData[placeName] || {};
+      processedData = normalizeFallbackData(placeName, fallbackItem);
 
       isSimulationMode = true;
       updateStatusBadge(true);
@@ -796,9 +802,11 @@ function startUpdateTicker() {
     console.log("Automatic 20-second tick interval fired.");
     
     if (isSimulationMode && currentNormalizedData) {
-      // If we are in simulation mode, fluctuate data natively on current location
-      currentNormalizedData = window.getFluctuatedData(currentPlace);
-      renderDashboard(currentNormalizedData);
+      // If we are in simulation mode, fluctuate fallback data and keep normalized shape
+      const fluctuated = window.getFluctuatedData(currentPlace);
+      const normalized = normalizeFallbackData(currentPlace, fluctuated);
+      currentNormalizedData = normalized;
+      renderDashboard(normalized);
     } else {
       // If we are in online API mode, do a fresh asynchronous pull
       fetchDashboardData(currentPlace);

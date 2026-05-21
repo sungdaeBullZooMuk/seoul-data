@@ -503,34 +503,68 @@ async function fetchDashboardData(placeName) {
 
   // Create unified storage object
   let processedData = null;
+  let apiUrl = '';
+  let directUrl = '';
+  let proxyMode = false;
+  let isSecurePage = window.location.protocol === 'https:';
+  let useProxy = false;
+  let simulated = null;
 
   try {
     // Attempt actual HTTP public API query (supports asynchronous fetch)
     // Build request using external config to allow real API key or proxy usage.
     const cfg = window.SEOUL_API_CONFIG || {};
-    const apiKey = cfg.API_KEY || 'sample';
-    const apiBase = cfg.API_BASE || 'http://openapi.seoul.go.kr:8088';
+    const apiKey = String(cfg.API_KEY || '').trim();
+    const apiBase = String(cfg.API_BASE || 'http://openapi.seoul.go.kr:8088').trim();
+    const proxyEndpoint = String(cfg.PROXY_ENDPOINT || '').trim();
+    const proxyConfigured = Boolean(cfg.USE_PROXY && proxyEndpoint.length > 0);
 
-    let endpoint = `${apiBase}/${apiKey}/json/citydata/1/5/${encodeURIComponent(placeName)}`;
-    let apiUrl = endpoint + `?_=${Date.now()}`;
+    const endpoint = `${apiBase}/${encodeURIComponent(apiKey)}/json/citydata/1/5/${encodeURIComponent(placeName)}`;
+    directUrl = `${endpoint}?_=${Date.now()}`;
+    apiUrl = directUrl;
 
-    // If a proxy is requested, the proxy endpoint must accept a target URL (encoded)
-    if (cfg.USE_PROXY && cfg.PROXY_ENDPOINT) {
-      // Many simple proxies accept the target as a `url` query param or direct appended value.
-      // Here we URL-encode the full target and append to the configured PROXY_ENDPOINT.
-      apiUrl = `${cfg.PROXY_ENDPOINT}${encodeURIComponent(endpoint + '?_=' + Date.now())}`;
+    const isHttpApi = apiBase.toLowerCase().startsWith('http://');
+    const needsProxy = isSecurePage && isHttpApi;
+    useProxy = Boolean(proxyConfigured && needsProxy);
+
+    if (proxyConfigured && !needsProxy) {
+      console.log('Proxy configured but not required for this page. Using direct HTTP API because page is not HTTPS or API endpoint is secure.');
     }
 
-    // If API key not configured (still 'sample'), force fallback simulation to avoid CORS/key errors.
-    if (!apiKey || apiKey === 'sample') {
+    if (useProxy) {
+      if (proxyEndpoint.includes('{{url}}')) {
+        apiUrl = proxyEndpoint.replace('{{url}}', encodeURIComponent(directUrl));
+      } else {
+        apiUrl = `${proxyEndpoint}${encodeURIComponent(directUrl)}`;
+      }
+      proxyMode = true;
+    } else if (needsProxy) {
+      throw new Error('HTTPS 페이지에서는 HTTP API 직접 호출이 차단됩니다. `USE_PROXY: true`와 `PROXY_ENDPOINT`를 설정하세요.');
+    }
+
+    console.log('API config:', {
+      apiKeySet: Boolean(apiKey && !/sample|YOUR_API_KEY_HERE/i.test(apiKey)),
+      apiKeyLength: apiKey.length,
+      apiKeyType: typeof apiKey,
+      apiBase,
+      proxyEndpoint,
+      useProxy,
+      proxyMode,
+      isSecurePage,
+      needsProxy,
+      apiUrl
+    });
+
+    // If API key not configured or still placeholder, force fallback simulation to avoid CORS/key errors.
+    if (!apiKey || /sample|YOUR_API_KEY_HERE/i.test(apiKey)) {
       throw new Error('Missing or placeholder API key in SEOUL_API_CONFIG.API_KEY — using simulation mode.');
     }
 
-    // High-performance asynchronous fetch with 3.5s timeout
+    // High-performance asynchronous fetch with a longer timeout for proxy DNS/relay delays
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3500);
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-    const response = await fetch(apiUrl, { signal: controller.signal });
+    const response = await fetch(apiUrl, { signal: controller.signal, cache: 'no-store' });
     clearTimeout(timeoutId);
 
     if (!response.ok) {
@@ -613,7 +647,7 @@ async function fetchDashboardData(placeName) {
       };
 
       isSimulationMode = false;
-      updateStatusBadge(false);
+      updateStatusBadge(false, proxyMode);
     } else {
       // In case keys don't match, trigger custom error
       throw new Error("Invalid API response format (Missing 'CITYDATA' key)");
@@ -621,37 +655,89 @@ async function fetchDashboardData(placeName) {
 
   } catch (error) {
     // --- EXCEPTION HANDLING ---
-    // In case of CORS error, network disconnect, or rate-limits, we seamlessly fallback to simulation mode
+    // In case of CORS error, network disconnect, or rate-limits, we may retry direct fetch on local HTTP
     console.warn("⚠️ [CORS / NETWORK FAIL] Redirecting to high-fidelity live simulation module.", error);
-    
-    // Simulate real-time fluctuated values derived from baseline fallbacks
-    const simulated = window.getFluctuatedData(placeName);
-    const fallbackItem = window.SeoulFallbackData[placeName] || {};
-    
-    processedData = {
-      areaName: placeName,
-      congestLvl: simulated ? simulated.AREA_CONGEST_LVL : "보통",
-      congestMsg: simulated ? simulated.AREA_CONGEST_MSG : "",
-      pplMin: simulated ? simulated.AREA_PPLN_MIN : 20000,
-      pplMax: simulated ? simulated.AREA_PPLN_MAX : 25000,
-      congestionTrend: simulated ? (simulated.CONGESTION_TREND || fallbackItem.CONGESTION_TREND) : Array(24).fill(30),
-      roadMsg: simulated ? simulated.ROAD_MSG : "",
-      roadTrafficIdx: simulated ? simulated.ROAD_TRAFFIC_IDX : "원활",
-      roadTrafficSpd: simulated ? simulated.ROAD_TRAFFIC_SPD : 25.0,
-      weatherTemp: simulated ? simulated.WEATHER_TEMP : 20.0,
-      weatherMsg: simulated ? simulated.WEATHER_MSG : "맑음",
-      pm10: simulated ? simulated.PM10 : 35,
-      pm25: simulated ? simulated.PM25 : 18,
-      pm10Idx: simulated ? simulated.PM10_INDEX : "보통",
-      pm25Idx: simulated ? simulated.PM25_INDEX : "좋음",
-      bikeList: simulated ? simulated.BIKE_LIST : [],
-      lat: fallbackItem.LAT || 37.5665,
-      lng: fallbackItem.LNG || 126.9780,
-      radius: fallbackItem.RADIUS || 300
-    };
-    
-    isSimulationMode = true;
-    updateStatusBadge(true);
+    console.error('Attempted API URL:', apiUrl || '(not set)');
+
+    if (!isSecurePage && useProxy && directUrl && apiUrl !== directUrl) {
+      try {
+        console.log('Retrying direct Seoul API fetch because this is a local HTTP page.');
+        const retryController = new AbortController();
+        const retryTimeoutId = setTimeout(() => retryController.abort(), 15000);
+        const retryResponse = await fetch(directUrl, { signal: retryController.signal, cache: 'no-store' });
+        clearTimeout(retryTimeoutId);
+
+        if (retryResponse.ok) {
+          const retryJson = await retryResponse.json();
+          if (retryJson.CITYDATA) {
+            console.log('Direct Seoul API fetch succeeded, using live data.');
+            const apiData = retryJson.CITYDATA;
+            const pplStts = apiData.LIVE_PPLN_STTS ? apiData.LIVE_PPLN_STTS[0] : {};
+            const roadStts = apiData.ROAD_TRAFFIC_STTS ? (apiData.ROAD_TRAFFIC_STTS.AVG_ROAD_DATA || {}) : {};
+            const weatherStts = apiData.WEATHER_STTS ? apiData.WEATHER_STTS[0] : {};
+
+            const fallbackItem = window.SeoulFallbackData[placeName] || {};
+            const simulatedData = window.getFluctuatedData(placeName) || fallbackItem;
+
+            processedData = {
+              areaName: placeName,
+              congestLvl: pplStts.AREA_CONGEST_LVL || simulatedData.AREA_CONGEST_LVL || '보통',
+              congestMsg: pplStts.AREA_CONGEST_MSG || simulatedData.AREA_CONGEST_MSG || '',
+              pplMin: parseInt(pplStts.AREA_PPLN_MIN) || simulatedData.AREA_PPLN_MIN || 20000,
+              pplMax: parseInt(pplStts.AREA_PPLN_MAX) || simulatedData.AREA_PPLN_MAX || 25000,
+              congestionTrend: simulatedData.CONGESTION_TREND || Array(24).fill(30),
+              roadMsg: roadStts.ROAD_MSG || simulatedData.ROAD_MSG || '',
+              roadTrafficIdx: roadStts.ROAD_TRAFFIC_IDX || simulatedData.ROAD_TRAFFIC_IDX || '원활',
+              roadTrafficSpd: parseFloat(roadStts.ROAD_TRAFFIC_SPD) || simulatedData.ROAD_TRAFFIC_SPD || 25.0,
+              weatherTemp: parseFloat(weatherStts.TEMP) || simulatedData.WEATHER_TEMP || 20.0,
+              weatherMsg: weatherStts.PRECPT_TYPE && weatherStts.PRECPT_TYPE !== '없음' ? weatherStts.PRECPT_TYPE : (weatherStts.FCST24HOURS && weatherStts.FCST24HOURS.length > 0 ? weatherStts.FCST24HOURS[0].SKY_STTS || '맑음' : '맑음'),
+              pm10: parseInt(weatherStts.PM10) || simulatedData.PM10 || 35,
+              pm25: parseInt(weatherStts.PM25) || simulatedData.PM25 || 18,
+              pm10Idx: weatherStts.PM10_INDEX || '보통',
+              pm25Idx: weatherStts.PM25_INDEX || '좋음',
+              bikeList: simulatedData.BIKE_LIST || [],
+              lat: parseFloat(simulatedData.LAT) || 37.5665,
+              lng: parseFloat(simulatedData.LNG) || 126.9780,
+              radius: simulatedData.RADIUS || 300
+            };
+
+            isSimulationMode = false;
+            updateStatusBadge(false, false);
+          }
+        }
+      } catch (retryError) {
+        console.warn('Direct retry failed:', retryError);
+      }
+    }
+
+    if (!processedData) {
+      simulated = window.getFluctuatedData(placeName);
+      const fallbackItem = window.SeoulFallbackData[placeName] || {};
+      processedData = {
+        areaName: placeName,
+        congestLvl: simulated ? simulated.AREA_CONGEST_LVL : '보통',
+        congestMsg: simulated ? simulated.AREA_CONGEST_MSG : '',
+        pplMin: simulated ? simulated.AREA_PPLN_MIN : 20000,
+        pplMax: simulated ? simulated.AREA_PPLN_MAX : 25000,
+        congestionTrend: simulated ? (simulated.CONGESTION_TREND || fallbackItem.CONGESTION_TREND) : Array(24).fill(30),
+        roadMsg: simulated ? simulated.ROAD_MSG : '',
+        roadTrafficIdx: simulated ? simulated.ROAD_TRAFFIC_IDX : '원활',
+        roadTrafficSpd: simulated ? simulated.ROAD_TRAFFIC_SPD : 25.0,
+        weatherTemp: simulated ? simulated.WEATHER_TEMP : 20.0,
+        weatherMsg: simulated ? simulated.WEATHER_MSG : '맑음',
+        pm10: simulated ? simulated.PM10 : 35,
+        pm25: simulated ? simulated.PM25 : 18,
+        pm10Idx: simulated ? simulated.PM10_INDEX : '보통',
+        pm25Idx: simulated ? simulated.PM25_INDEX : '좋음',
+        bikeList: simulated ? simulated.BIKE_LIST : [],
+        lat: fallbackItem.LAT || 37.5665,
+        lng: fallbackItem.LNG || 126.9780,
+        radius: fallbackItem.RADIUS || 300
+      };
+
+      isSimulationMode = true;
+      updateStatusBadge(true);
+    }
   }
 
   // Bind normalized data and render visual components
@@ -668,14 +754,18 @@ async function fetchDashboardData(placeName) {
 }
 
 // Update upper header badge styles based on active modes
-function updateStatusBadge(simulation) {
+function updateStatusBadge(simulation, proxyMode = false) {
   const badge = document.getElementById('api-status');
   const txt = document.getElementById('api-status-text');
 
   if (simulation) {
     badge.className = 'api-status-badge simulation-mode';
     txt.innerText = '실시간 시뮬레이션 모드';
-    badge.setAttribute('title', '웹 브라우저의 CORS(출처 제한) 보안 정책으로 인해 실제 규격과 일치하는 실시간 시뮬레이션 데이터로 안전하게 작동합니다.');
+    badge.setAttribute('title', '웹 브라우저의 CORS(출처 제한) 또는 API 키/네트워크 문제로 인해 시뮬레이션 모드로 전환되었습니다.');
+  } else if (proxyMode) {
+    badge.className = 'api-status-badge proxy-mode';
+    txt.innerText = '프록시 API 연동 완료';
+    badge.setAttribute('title', 'HTTPS 환경에서 외부 CORS 프록시를 통해 서울시 열린데이터 API와 통신합니다.');
   } else {
     badge.className = 'api-status-badge';
     txt.innerText = '공공 API 연동 완료';
@@ -690,9 +780,9 @@ function startUpdateTicker() {
     clearInterval(refreshIntervalId);
   }
 
-  // Ticks every 10 seconds to fluctuate variables slightly and recreate live updates
+  // Ticks every 20 seconds to fluctuate variables slightly and recreate live updates
   refreshIntervalId = setInterval(() => {
-    console.log("Automatic 10-second tick interval fired.");
+    console.log("Automatic 20-second tick interval fired.");
     
     if (isSimulationMode && currentNormalizedData) {
       // If we are in simulation mode, fluctuate data natively on current location
@@ -702,7 +792,7 @@ function startUpdateTicker() {
       // If we are in online API mode, do a fresh asynchronous pull
       fetchDashboardData(currentPlace);
     }
-  }, 10000);
+  }, 20000);
 }
 
 // --- 7. Initialization & Event Handlers Setup ---

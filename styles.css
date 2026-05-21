@@ -122,6 +122,12 @@ header h1 {
   color: var(--color-yellow);
 }
 
+.api-status-badge.proxy-mode {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  color: #3b82f6;
+}
+
 .api-status-badge .indicator-dot {
   width: 8px;
   height: 8px;

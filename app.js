@@ -561,9 +561,14 @@ async function fetchDashboardData(placeName) {
       apiUrl
     });
 
-    // If API key not configured or still placeholder, force fallback simulation to avoid CORS/key errors.
+    // If API key not configured or still placeholder, allow proceeding only when
+    // a relative serverless proxy is configured (so the server holds the real key).
     if (!apiKey || /sample|YOUR_API_KEY_HERE/i.test(apiKey)) {
-      throw new Error('Missing or placeholder API key in SEOUL_API_CONFIG.API_KEY — using simulation mode.');
+      if (!(proxyConfigured && proxyEndpoint.startsWith('/'))) {
+        throw new Error('Missing or placeholder API key in SEOUL_API_CONFIG.API_KEY — using simulation mode.');
+      } else {
+        console.log('Client API key empty, but relative server proxy detected — proceeding via proxy.');
+      }
     }
 
     // High-performance asynchronous fetch with a longer timeout for proxy DNS/relay delays

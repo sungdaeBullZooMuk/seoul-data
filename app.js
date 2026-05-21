@@ -46,6 +46,16 @@ function normalizeFallbackData(placeName, fallbackPayload) {
   };
 }
 
+function resolveApiPlaceName(placeName) {
+  const apiPlaceMap = {
+    '명동': '명동역',
+    '광화문': '광화문역',
+    '이태원': '이태원역',
+    '신촌·이대': '신촌역'
+  };
+  return apiPlaceMap[placeName] || placeName;
+}
+
 // --- 2. Chart.js Themes & Initialization ---
 function initCharts() {
   const ctxTrend = document.getElementById('congestionTrendChart').getContext('2d');
@@ -543,8 +553,9 @@ async function fetchDashboardData(placeName) {
     const apiBase = String(cfg.API_BASE || 'http://openapi.seoul.go.kr:8088').trim();
     const proxyEndpoint = String(cfg.PROXY_ENDPOINT || '').trim();
     const proxyConfigured = Boolean(cfg.USE_PROXY && proxyEndpoint.length > 0);
+    const apiPlaceName = resolveApiPlaceName(placeName);
 
-    const endpoint = `${apiBase}/${encodeURIComponent(apiKey)}/json/citydata/1/5/${encodeURIComponent(placeName)}`;
+    const endpoint = `${apiBase}/${encodeURIComponent(apiKey)}/json/citydata/1/5/${encodeURIComponent(apiPlaceName)}`;
     directUrl = `${endpoint}?_=${Date.now()}`;
     apiUrl = directUrl;
 
@@ -578,6 +589,7 @@ async function fetchDashboardData(placeName) {
       apiKeyLength: apiKey.length,
       apiKeyType: typeof apiKey,
       apiBase,
+      apiPlaceName,
       proxyEndpoint,
       useProxy,
       proxyMode,

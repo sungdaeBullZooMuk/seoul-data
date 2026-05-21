@@ -49,16 +49,16 @@ function normalizeFallbackData(placeName, fallbackPayload) {
 function resolveApiPlaceName(placeName) {
   const apiPlaceMap = {
     '강남역': '강남역',
-    '홍대입구역': '홍대관광특구',
+    '홍대입구역': '홍대 관광특구',
     '여의도': '여의도',
-    '명동': '명동관광특구',
+    '명동': '명동 관광특구',
     '잠실역': '잠실역',
-    '이태원': '이태원관광특구',
+    '이태원': '이태원 관광특구',
     '가로수길': '가로수길',
     '광화문': '광화문·덕수궁',
     '건대입구역': '건대입구역',
-    '신촌·이대': '신촌·이대거리',
-    '혜화역': '대학로·혜화역'
+    '신촌·이대': '신촌·이대역',
+    '혜화역': '혜화역'
   };
   return apiPlaceMap[placeName] || placeName;
 }

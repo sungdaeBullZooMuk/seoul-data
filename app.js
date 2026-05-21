@@ -532,8 +532,14 @@ async function fetchDashboardData(placeName) {
     }
 
     if (useProxy) {
+      // Support three proxy endpoint forms:
+      // 1) endpoint includes '{{url}}' -> replace with encoded full direct URL
+      // 2) relative server endpoint starting with '/' -> append encoded placeName (server will add API key)
+      // 3) other absolute proxy -> append encoded full direct URL
       if (proxyEndpoint.includes('{{url}}')) {
         apiUrl = proxyEndpoint.replace('{{url}}', encodeURIComponent(directUrl));
+      } else if (proxyEndpoint.startsWith('/')) {
+        apiUrl = `${proxyEndpoint}${encodeURIComponent(placeName)}`;
       } else {
         apiUrl = `${proxyEndpoint}${encodeURIComponent(directUrl)}`;
       }

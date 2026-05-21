@@ -575,7 +575,7 @@ async function fetchDashboardData(placeName) {
       if (proxyEndpoint.includes('{{url}}')) {
         apiUrl = proxyEndpoint.replace('{{url}}', encodeURIComponent(directUrl));
       } else if (proxyEndpoint.startsWith('/')) {
-        apiUrl = `${proxyEndpoint}${encodeURIComponent(placeName)}`;
+        apiUrl = `${proxyEndpoint}${encodeURIComponent(apiPlaceName)}`;
       } else {
         apiUrl = `${proxyEndpoint}${encodeURIComponent(directUrl)}`;
       }

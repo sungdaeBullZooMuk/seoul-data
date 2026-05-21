@@ -654,8 +654,8 @@ async function fetchDashboardData(placeName) {
       const fallbackItem = window.SeoulFallbackData[placeName] || {};
       const isSampleData = apiData.AREA_NM !== apiPlaceName;
 
-      let pplMin = parseInt(pplStts.AREA_PPLN_MIN) || 20000;
-      let pplMax = parseInt(pplStts.AREA_PPLN_MAX) || 25000;
+      let pplMin = parseInt(pplStts.AREA_PPLTN_MIN || pplStts.AREA_PPLN_MIN) || 20000;
+      let pplMax = parseInt(pplStts.AREA_PPLTN_MAX || pplStts.AREA_PPLN_MAX) || 25000;
       let congestLvl = pplStts.AREA_CONGEST_LVL || "보통";
       let congestMsg = pplStts.AREA_CONGEST_MSG || "상세 혼잡 내용이 제공되지 않습니다.";
       let roadTrafficIdx = roadStts.ROAD_TRAFFIC_IDX || "원활";
@@ -739,8 +739,8 @@ async function fetchDashboardData(placeName) {
               areaName: placeName,
               congestLvl: pplStts.AREA_CONGEST_LVL || simulatedData.AREA_CONGEST_LVL || '보통',
               congestMsg: pplStts.AREA_CONGEST_MSG || simulatedData.AREA_CONGEST_MSG || '',
-              pplMin: parseInt(pplStts.AREA_PPLN_MIN) || simulatedData.AREA_PPLN_MIN || 20000,
-              pplMax: parseInt(pplStts.AREA_PPLN_MAX) || simulatedData.AREA_PPLN_MAX || 25000,
+              pplMin: parseInt(pplStts.AREA_PPLTN_MIN || pplStts.AREA_PPLN_MIN) || simulatedData.AREA_PPLN_MIN || 20000,
+              pplMax: parseInt(pplStts.AREA_PPLTN_MAX || pplStts.AREA_PPLN_MAX) || simulatedData.AREA_PPLN_MAX || 25000,
               congestionTrend: simulatedData.CONGESTION_TREND || Array(24).fill(30),
               roadMsg: roadStts.ROAD_MSG || simulatedData.ROAD_MSG || '',
               roadTrafficIdx: roadStts.ROAD_TRAFFIC_IDX || simulatedData.ROAD_TRAFFIC_IDX || '원활',

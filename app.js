@@ -49,16 +49,16 @@ function normalizeFallbackData(placeName, fallbackPayload) {
 function resolveApiPlaceName(placeName) {
   const apiPlaceMap = {
     '강남역': '강남역',
-    '홍대입구역': '홍대입구역',
+    '홍대입구역': '홍대관광특구',
     '여의도': '여의도',
-    '명동': '명동역',
+    '명동': '명동관광특구',
     '잠실역': '잠실역',
-    '이태원': '이태원역',
+    '이태원': '이태원관광특구',
     '가로수길': '가로수길',
-    '광화문': '광화문역',
+    '광화문': '광화문·덕수궁',
     '건대입구역': '건대입구역',
-    '신촌·이대': '신촌역',
-    '혜화역': '혜화역'
+    '신촌·이대': '신촌·이대거리',
+    '혜화역': '대학로·혜화역'
   };
   return apiPlaceMap[placeName] || placeName;
 }
@@ -652,7 +652,7 @@ async function fetchDashboardData(placeName) {
 
       // Unified Bike listing parsing (from Seoul API or merge fallback coordinates)
       const fallbackItem = window.SeoulFallbackData[placeName] || {};
-      const isSampleData = apiData.AREA_NM !== placeName;
+      const isSampleData = apiData.AREA_NM !== apiPlaceName;
 
       let pplMin = parseInt(pplStts.AREA_PPLN_MIN) || 20000;
       let pplMax = parseInt(pplStts.AREA_PPLN_MAX) || 25000;

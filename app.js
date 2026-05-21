@@ -506,9 +506,26 @@ async function fetchDashboardData(placeName) {
 
   try {
     // Attempt actual HTTP public API query (supports asynchronous fetch)
-    // We append a timestamp cashbuster to ensure browser doesn't load a cached call
-    const apiUrl = `http://openapi.seoul.go.kr:8088/sample/json/citydata/1/5/${encodeURIComponent(placeName)}?_=${Date.now()}`;
-    
+    // Build request using external config to allow real API key or proxy usage.
+    const cfg = window.SEOUL_API_CONFIG || {};
+    const apiKey = cfg.API_KEY || 'sample';
+    const apiBase = cfg.API_BASE || 'http://openapi.seoul.go.kr:8088';
+
+    let endpoint = `${apiBase}/${apiKey}/json/citydata/1/5/${encodeURIComponent(placeName)}`;
+    let apiUrl = endpoint + `?_=${Date.now()}`;
+
+    // If a proxy is requested, the proxy endpoint must accept a target URL (encoded)
+    if (cfg.USE_PROXY && cfg.PROXY_ENDPOINT) {
+      // Many simple proxies accept the target as a `url` query param or direct appended value.
+      // Here we URL-encode the full target and append to the configured PROXY_ENDPOINT.
+      apiUrl = `${cfg.PROXY_ENDPOINT}${encodeURIComponent(endpoint + '?_=' + Date.now())}`;
+    }
+
+    // If API key not configured (still 'sample'), force fallback simulation to avoid CORS/key errors.
+    if (!apiKey || apiKey === 'sample') {
+      throw new Error('Missing or placeholder API key in SEOUL_API_CONFIG.API_KEY — using simulation mode.');
+    }
+
     // High-performance asynchronous fetch with 3.5s timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 3500);
